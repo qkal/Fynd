@@ -22,10 +22,12 @@ export class CacheStore {
     this.entries = config.persist ? hydrateCache(config.persist) : new Map();
   }
 
+  /** Returns the cached entry for `key`, or `undefined` if not present. */
   get(key: string): CacheEntry | undefined {
     return this.entries.get(key);
   }
 
+  /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
     this.entries.set(key, entry);
     if (this.config.persist) {
@@ -44,11 +46,13 @@ export class CacheStore {
     return Date.now() - entry.timestamp > staleTime;
   }
 
+  /** Removes the entry for `key` and notifies subscribers. No-op if key does not exist. */
   delete(key: string): void {
     this.entries.delete(key);
     this.notify(key);
   }
 
+  /** Removes all entries and notifies all subscribers. */
   clear(): void {
     const keys = [...this.entries.keys()];
     this.entries.clear();
