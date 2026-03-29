@@ -49,6 +49,9 @@ export class CacheStore {
   /** Removes the entry for `key` and notifies subscribers. No-op if key does not exist. */
   delete(key: string): void {
     this.entries.delete(key);
+    if (this.config.persist) {
+      persistCache(this.config.persist, this.entries);
+    }
     this.notify(key);
   }
 
@@ -56,6 +59,9 @@ export class CacheStore {
   clear(): void {
     const keys = [...this.entries.keys()];
     this.entries.clear();
+    if (this.config.persist) {
+      persistCache(this.config.persist, this.entries);
+    }
     for (const key of keys) this.notify(key);
   }
 

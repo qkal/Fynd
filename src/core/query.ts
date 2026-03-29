@@ -123,10 +123,22 @@ export class QueryRunner<T> {
       this.intervalId = undefined;
     }
     if (this.visibilityHandler) {
-      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+      }
       this.visibilityHandler = undefined;
     }
     this.subscribers.clear();
+  }
+
+  /**
+   * Resets the destroyed and sideEffectsSetUp flags, allowing re-execution
+   * after a cleanup cycle. Called by the Svelte adapter when the `enabled`
+   * condition transitions back to true after a previous cleanup.
+   */
+  reset(): void {
+    this.destroyed = false;
+    this.sideEffectsSetUp = false;
   }
 
   private async fetchWithRetry(attempt = 0): Promise<void> {
@@ -139,6 +151,7 @@ export class QueryRunner<T> {
       if (this.destroyed) return;
       if (attempt < this.cacheConfig.retry) {
         await new Promise<void>((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        if (this.destroyed) return;
         return this.fetchWithRetry(attempt + 1);
       }
       const error = err instanceof Error ? err : new Error(String(err));
@@ -164,7 +177,9 @@ export class QueryRunner<T> {
           }
         }
       };
-      document.addEventListener('visibilitychange', this.visibilityHandler);
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', this.visibilityHandler);
+      }
     }
   }
 

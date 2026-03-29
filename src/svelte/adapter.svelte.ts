@@ -22,6 +22,7 @@ export function createReactiveQuery<T>(runner: QueryRunner<T>) {
     const unsubscribe = runner.subscribe((newState) => {
       state = newState;
     });
+    runner.reset();
     runner.execute();
 
     return () => {
