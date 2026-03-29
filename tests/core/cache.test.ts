@@ -170,7 +170,7 @@ describe('CacheStore', () => {
       const storage = makeMockStorage();
       const store = new CacheStore({ persist: storage });
       store.set('["todos"]', makeEntry([1]));
-      expect(storage.getItem('swant-cache')).not.toBeNull();
+      expect(storage.getItem('skarn-cache')).not.toBeNull();
     });
 
     it('hydrates entries from storage on construction', () => {

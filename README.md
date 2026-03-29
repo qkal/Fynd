@@ -1,11 +1,11 @@
-# Swant
+# Skarn
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/swant)](https://npmjs.com/package/swant)
-[![license](https://img.shields.io/npm/l/swant)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/skarn)](https://npmjs.com/package/skarn)
+[![license](https://img.shields.io/npm/l/skarn)](./LICENSE)
 
-## Why Swant?
+## Why Skarn?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add swant
+bun add skarn
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'swant';
+import { createCache } from 'skarn';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
