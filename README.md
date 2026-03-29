@@ -2,13 +2,23 @@
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
+[![TypeScript](https://img.shields.io/badge/powered%20by-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![npm](https://img.shields.io/npm/v/kvale)](https://npmjs.com/package/kvale)
 [![license](https://img.shields.io/npm/l/kvale)](./LICENSE)
 [![svelte](https://img.shields.io/badge/svelte-5%2B-ff3e00)](https://svelte.dev)
+[![zero deps](https://img.shields.io/badge/dependencies-zero-brightgreen)](./package.json)
 
 ---
 
-Kvale is a **zero-dependency, runes-native data fetching and caching library** built from the ground up for SvelteKit and Svelte 5. It gives you stale-while-revalidate caching, background refetching, polling, persistence, and dependent queries — with an API so simple it disappears into your code.
+> **A statement from Kal, founder of [Complexia](https://complexia.org)**
+>
+> Software built for the age of AI must be transparent, auditable, and correct by design. As artificial intelligence becomes a native tool in development workflows — reviewing code, generating logic, suggesting patterns — the libraries and data layers it interacts with carry new responsibility. Ambiguous state, hidden side effects, and silent failures are not just developer experience problems: they become safety problems when AI reasoning depends on them. At Complexia, we believe the right response is to build tools that are small, honest, and fully traceable. Kvale is one expression of that commitment.
+>
+> — Kal ([@qkal](https://github.com/qkal))
+
+---
+
+Kvale is a **zero-dependency, runes-native data fetching and caching library** built from the ground up for SvelteKit and Svelte 5. It gives you stale-while-revalidate caching, background refetching, polling, persistence, and dependent queries — with an API so minimal it disappears into your code.
 
 No providers. No wrappers. No boilerplate. Just `createCache()` and `cache.query()`.
 
@@ -38,18 +48,21 @@ No providers. No wrappers. No boilerplate. Just `createCache()` and `cache.query
 ## Why Kvale?
 
 - **Born in Svelte 5** — uses `$state` and `$effect` natively. No legacy store adapters, no `writable()`, no React-isms.
-- **No `QueryClientProvider`** — just call `createCache()` once and use it anywhere.
-- **Works everywhere** — `.svelte`, `.svelte.ts`, and plain `.ts` files. The pure TypeScript core has zero framework dependencies.
-- **Stale-while-revalidate** — cached data is shown instantly while fresh data loads silently in the background.
+- **No `QueryClientProvider`** — call `createCache()` once and use it anywhere. Your app stays yours.
+- **Works everywhere** — `.svelte`, `.svelte.ts`, and plain `.ts` files. The pure TypeScript core has zero framework dependencies and runs in any JS environment.
+- **Stale-while-revalidate** — cached data is shown instantly while fresh data loads silently in the background. Users never see a blank state.
 - **Reactive dependent queries** — `enabled: () => !!user.data?.id` just works. Svelte tracks it automatically.
+- **Impossible states eliminated** — a single `status` discriminant (`'idle' | 'loading' | 'refreshing' | 'success' | 'error'`) replaces the footgun of boolean flags.
 - **Zero dependencies** — ~3kb minified. Nothing else pulled in.
 
 ---
 
 ## Installation
 
+Choose your package manager:
+
 ```bash
-# Bun
+# Bun (recommended)
 bun add kvale
 
 # npm
@@ -57,9 +70,6 @@ npm install kvale
 
 # pnpm
 pnpm add kvale
-
-# yarn
-yarn add kvale
 ```
 
 **Peer dependency:** Svelte 5.25.0 or later.
@@ -68,21 +78,35 @@ yarn add kvale
 
 ## Quick Start
 
+**Step 1: Create your cache instance**
+
+Set up a shared cache in `$lib/cache.ts` — call this once per app:
+
 ```ts
-// $lib/cache.ts
+// src/lib/cache.ts
 import { createCache } from 'kvale';
 
 export const cache = createCache({
-  staleTime: 30_000,          // data is fresh for 30s (default)
-  retry: 1,                   // retry once on failure (default)
-  refetchOnWindowFocus: true, // refetch stale data on tab focus (default)
+  staleTime: 30_000,           // data stays fresh for 30s (default)
+  retry: 1,                    // retry once on failure (default)
+  refetchOnWindowFocus: true,  // refetch stale queries on tab focus (default)
 });
 ```
 
+**Step 2: Query data in any component**
+
+Import the cache and call `cache.query()` in the `<script>` block:
+
 ```svelte
-<!-- +page.svelte -->
+<!-- src/routes/+page.svelte -->
 <script lang="ts">
   import { cache } from '$lib/cache';
+
+  interface Todo {
+    id: number;
+    title: string;
+    completed: boolean;
+  }
 
   const todos = cache.query<Todo[]>({
     key: 'todos',
@@ -93,12 +117,31 @@ export const cache = createCache({
 {#if todos.status === 'loading'}
   <p>Loading...</p>
 {:else if todos.status === 'error'}
-  <p>Error: {todos.error.message}</p>
-{:else}
-  {#each todos.data as todo}
-    <p>{todo.title}</p>
-  {/each}
+  <p>Something went wrong: {todos.error.message}</p>
+{:else if todos.status === 'success'}
+  <ul>
+    {#each todos.data as todo}
+      <li class:done={todo.completed}>{todo.title}</li>
+    {/each}
+  </ul>
 {/if}
+
+{#if todos.status === 'refreshing'}
+  <small>Refreshing in background…</small>
+{/if}
+```
+
+**Step 3: Do not destructure the result**
+
+`QueryResult` is a reactive object. Destructuring breaks reactivity — always access properties directly:
+
+```ts
+// ✅ correct
+todos.status
+todos.data
+
+// ❌ breaks reactivity
+const { status, data } = todos;
 ```
 
 ---
@@ -145,8 +188,8 @@ The reactive object returned by `cache.query()`. Access properties directly — 
 | Status | Meaning |
 |---|---|
 | `idle` | Query is disabled (`enabled: false`) |
-| `loading` | First fetch in progress, no cached data |
-| `refreshing` | Background refetch with stale data still visible |
+| `loading` | First fetch in progress, no cached data available |
+| `refreshing` | Background refetch — stale data is still visible |
 | `success` | Data loaded successfully |
 | `error` | Fetch failed after all retries |
 
@@ -186,17 +229,17 @@ Keep data fresh by refetching on an interval.
   const prices = cache.query({
     key: 'crypto-prices',
     fn: () => fetch('/api/prices').then(r => r.json()),
-    refetchInterval: 5_000,
+    refetchInterval: 5_000, // refetch every 5 seconds
   });
 </script>
 ```
 
 ### localStorage Persistence
 
-Hydrate the cache from localStorage on page load so users never see a blank state.
+Hydrate the cache from `localStorage` on page load so users never see a blank state on return visits.
 
 ```ts
-// $lib/cache.ts
+// src/lib/cache.ts
 import { createCache } from 'kvale';
 
 export const cache = createCache({
@@ -206,10 +249,10 @@ export const cache = createCache({
 
 ### Reusable Query Function
 
-Define queries once, use anywhere — in `.svelte`, `.svelte.ts`, or plain `.ts`.
+Define queries once, use anywhere — in `.svelte`, `.svelte.ts`, or plain `.ts` files.
 
 ```ts
-// queries/todos.svelte.ts
+// src/lib/queries/todos.svelte.ts
 import { cache } from '$lib/cache';
 
 export function useTodos(status?: string) {
@@ -222,12 +265,38 @@ export function useTodos(status?: string) {
 
 ### Manual Refetch
 
+Expose a refresh button to let users pull fresh data on demand.
+
 ```svelte
 <script lang="ts">
+  import { cache } from '$lib/cache';
+
   const todos = cache.query({ key: 'todos', fn: fetchTodos });
 </script>
 
-<button onclick={() => todos.refetch()}>Refresh</button>
+<button onclick={() => todos.refetch()}>
+  {todos.status === 'refreshing' ? 'Refreshing…' : 'Refresh'}
+</button>
+```
+
+### Disabled Query
+
+Use `enabled` to conditionally skip fetching — useful for search inputs, authenticated routes, or multi-step flows.
+
+```svelte
+<script lang="ts">
+  import { cache } from '$lib/cache';
+
+  let searchTerm = $state('');
+
+  const results = cache.query({
+    key: ['search', searchTerm],
+    fn: () => fetch(`/api/search?q=${searchTerm}`).then(r => r.json()),
+    enabled: () => searchTerm.length > 2,
+  });
+</script>
+
+<input bind:value={searchTerm} placeholder="Search…" />
 ```
 
 ---
@@ -240,20 +309,12 @@ export function useTodos(status?: string) {
 
 ---
 
-## Built by Complexia
-
-Kvale is an open source project by **[Complexia](https://complexia.org)** — a software studio founded by **[Kal](https://github.com/qkal)** with a simple belief: the best tools are the ones that get out of your way.
-
-We build libraries and products that make development more intuitive, more enjoyable, and more productive. Not by abstracting away complexity — but by designing it out entirely. Every API we ship is one we'd want to use ourselves.
-
-Our vision is a future where developers spend their time building things that matter, armed with tools that are small, honest, and correct. Kvale is one small piece of that.
-
----
-
 ## Contributing
 
 We welcome contributions of all kinds. See [CONTRIBUTING.md](./CONTRIBUTING.md) to get started.
 
+---
+
 ## License
 
-MIT © [Complexia](https://complexia.org)
+MIT © Kal, founder of [Complexia](https://complexia.org)
