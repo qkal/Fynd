@@ -1,8 +1,8 @@
-# Quelm — CLAUDE.md
+# Klync — CLAUDE.md
 
 ## Identity
 
-You are building **Quelm** — a runes-native, SvelteKit-first data fetching & caching library.
+You are building **Klync** — a runes-native, SvelteKit-first data fetching & caching library.
 Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Stack
@@ -15,7 +15,7 @@ Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Architecture
 
-Quelm has a **pure TypeScript core** and a **thin Svelte adapter**:
+Klync has a **pure TypeScript core** and a **thin Svelte adapter**:
 
 ```
 src/
@@ -85,8 +85,8 @@ Returns a reactive object:
 
 ## What NOT to Do
 
-- Do NOT add `QueryClientProvider` or any wrapper component — Quelm uses explicit `createCache()`
+- Do NOT add `QueryClientProvider` or any wrapper component — Klync uses explicit `createCache()`
 - Do NOT use Svelte stores (`writable`, `readable`) — this is runes-only (Svelte 5+)
 - Do NOT use `$:` reactive declarations — runes only (`$state`, `$derived`, `$effect`)
-- Do NOT add dependencies unless absolutely necessary — Quelm should be zero-dep
-- Do NOT use `createQuery()` naming — Quelm uses `cache.query()` to differentiate from TanStack
+- Do NOT add dependencies unless absolutely necessary — Klync should be zero-dep
+- Do NOT use `createQuery()` naming — Klync uses `cache.query()` to differentiate from TanStack

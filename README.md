@@ -1,11 +1,11 @@
-# Quelm
+# Klync
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/quelm)](https://npmjs.com/package/quelm)
-[![license](https://img.shields.io/npm/l/quelm)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/klync)](https://npmjs.com/package/klync)
+[![license](https://img.shields.io/npm/l/klync)](./LICENSE)
 
-## Why Quelm?
+## Why Klync?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add quelm
+bun add klync
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'quelm';
+import { createCache } from 'klync';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
