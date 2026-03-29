@@ -42,10 +42,6 @@ export class CacheStore {
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
-    // If no active runners, start gcTime timer
-    if ((this.keyRefs.get(key) ?? 0) === 0) {
-      this.startGcTimer(key);
-    }
     this.notify(key);
   }
 
@@ -115,6 +111,10 @@ export class CacheStore {
     const prev = this.cache.get(key)?.data as T | undefined;
     const next = typeof data === 'function' ? (data as (prev: T | undefined) => T)(prev) : data;
     this.set(key, { data: next, timestamp: Date.now(), error: null });
+    // Start gc timer if no active runners — set() no longer does this for us
+    if ((this.keyRefs.get(key) ?? 0) === 0) {
+      this.startGcTimer(key);
+    }
   }
 
   /**

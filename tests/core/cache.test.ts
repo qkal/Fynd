@@ -316,4 +316,50 @@ describe('CacheStore', () => {
       expect([...store.entries()]).toHaveLength(0);
     });
   });
+
+  describe('gcTime', () => {
+    it('prunes entry after gcTime when no subscribers (via setQueryData)', () => {
+      const store = new CacheStore({ gcTime: 5_000 });
+      store.setQueryData('["todos"]', [1, 2, 3]);
+      expect(store.get('["todos"]')).toBeDefined();
+      vi.advanceTimersByTime(5_001);
+      expect(store.get('["todos"]')).toBeUndefined();
+    });
+
+    it('does not prune entry while a runner is registered', () => {
+      const store = new CacheStore({ gcTime: 5_000 });
+      store.setQueryData('["todos"]', [1, 2, 3]);
+      store.registerKey('["todos"]');
+      vi.advanceTimersByTime(10_000);
+      expect(store.get('["todos"]')).toBeDefined();
+      store.unregisterKey('["todos"]');
+    });
+
+    it('prunes entry after gcTime once the last runner unregisters', () => {
+      const store = new CacheStore({ gcTime: 5_000 });
+      store.setQueryData('["todos"]', [1, 2]);
+      store.registerKey('["todos"]');
+      vi.advanceTimersByTime(4_000);
+      store.unregisterKey('["todos"]');
+      vi.advanceTimersByTime(5_001);
+      expect(store.get('["todos"]')).toBeUndefined();
+    });
+
+    it('cancels gcTime timer when a new runner registers before expiry', () => {
+      const store = new CacheStore({ gcTime: 5_000 });
+      store.setQueryData('["todos"]', [1, 2]);
+      vi.advanceTimersByTime(4_000);
+      store.registerKey('["todos"]');
+      vi.advanceTimersByTime(5_001);
+      expect(store.get('["todos"]')).toBeDefined();
+      store.unregisterKey('["todos"]');
+    });
+
+    it('prunes entry created via setQueryData with no active runners', () => {
+      const store = new CacheStore({ gcTime: 5_000 });
+      store.setQueryData('["todos"]', [1, 2]);
+      vi.advanceTimersByTime(5_001);
+      expect(store.get('["todos"]')).toBeUndefined();
+    });
+  });
 });
