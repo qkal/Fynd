@@ -1,11 +1,11 @@
-# Skarn
+# Cresh
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/skarn)](https://npmjs.com/package/skarn)
-[![license](https://img.shields.io/npm/l/skarn)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/cresh)](https://npmjs.com/package/cresh)
+[![license](https://img.shields.io/npm/l/cresh)](./LICENSE)
 
-## Why Skarn?
+## Why Cresh?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add skarn
+bun add cresh
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'skarn';
+import { createCache } from 'cresh';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
