@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CacheStore } from '../../src/core/cache';
 import type { CacheEntry } from '../../src/core/types';
 
@@ -10,17 +10,29 @@ function makeMockStorage(): Storage {
   const store = new Map<string, string>();
   return {
     getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => { store.set(key, value); },
-    removeItem: (key: string) => { store.delete(key); },
-    clear: () => { store.clear(); },
-    get length() { return store.size; },
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
     key: (index: number) => [...store.keys()][index] ?? null,
   };
 }
 
 describe('CacheStore', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   describe('get / set', () => {
     it('returns undefined for unknown key', () => {

@@ -31,7 +31,5 @@ export function serializeKey(key: unknown[]): string {
  */
 export function matchesKey(partial: unknown[], full: unknown[]): boolean {
   if (partial.length > full.length) return false;
-  return partial.every(
-    (segment, i) => JSON.stringify(segment) === JSON.stringify(full[i]),
-  );
+  return partial.every((segment, i) => JSON.stringify(segment) === JSON.stringify(full[i]));
 }

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeKey, serializeKey, matchesKey } from '../../src/core/key';
+import { describe, expect, it } from 'vitest';
+import { matchesKey, normalizeKey, serializeKey } from '../../src/core/key';
 
 describe('normalizeKey', () => {
   it('wraps a string to an array', () => {

@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { createCache } from '../../../src/index';
+import { createCache } from '../../../src/index';
 
-  interface Props {
-    fn: () => Promise<unknown>;
-    enabled?: boolean | (() => boolean);
-  }
+interface Props {
+  fn: () => Promise<unknown>;
+  enabled?: boolean | (() => boolean);
+}
 
-  let { fn, enabled }: Props = $props();
+const { fn, enabled }: Props = $props();
 
-  const cache = createCache({ refetchOnWindowFocus: false });
-  const result = cache.query({ key: 'test', fn, enabled });
+const cache = createCache({ refetchOnWindowFocus: false });
+const result = cache.query({ key: 'test', fn, enabled });
 </script>
 
 <div data-testid="status">{result.status}</div>

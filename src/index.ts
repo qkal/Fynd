@@ -1,8 +1,8 @@
 import { CacheStore } from './core/cache';
 import { QueryRunner } from './core/query';
-import { createReactiveQuery } from './svelte/adapter.svelte';
 import { CACHE_DEFAULTS } from './core/types';
 import type { CacheConfig, QueryConfig } from './core/types';
+import { createReactiveQuery } from './svelte/adapter.svelte';
 
 export type { CacheConfig, QueryConfig } from './core/types';
 export type { QueryStatus } from './core/types';

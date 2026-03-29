@@ -1,6 +1,6 @@
-import type { CacheConfig, QueryConfig, QueryState, QuerySubscriber } from './types';
 import type { CacheStore } from './cache';
 import { normalizeKey, serializeKey } from './key';
+import type { CacheConfig, QueryConfig, QueryState, QuerySubscriber } from './types';
 
 /**
  * Orchestrates the full query lifecycle: cache lookup, fetch, retry, polling,
@@ -64,7 +64,9 @@ export class QueryRunner<T> {
   /** Subscribe to state changes. Returns an unsubscribe function. */
   subscribe(callback: QuerySubscriber<T>): () => void {
     this.subscribers.add(callback);
-    return () => { this.subscribers.delete(callback); };
+    return () => {
+      this.subscribers.delete(callback);
+    };
   }
 
   /**
@@ -149,7 +151,9 @@ export class QueryRunner<T> {
     this.sideEffectsSetUp = true;
 
     if (this.config.refetchInterval !== undefined) {
-      this.intervalId = setInterval(() => { void this.refetch(); }, this.config.refetchInterval);
+      this.intervalId = setInterval(() => {
+        void this.refetch();
+      }, this.config.refetchInterval);
     }
 
     if (this.cacheConfig.refetchOnWindowFocus) {
@@ -166,6 +170,6 @@ export class QueryRunner<T> {
 
   private setState(next: QueryState<T>): void {
     this.state = next;
-    this.subscribers.forEach((cb) => cb(next));
+    for (const cb of this.subscribers) cb(next);
   }
 }

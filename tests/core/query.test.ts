@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QueryRunner } from '../../src/core/query';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CacheStore } from '../../src/core/cache';
+import { QueryRunner } from '../../src/core/query';
 import type { CacheConfig, QueryConfig } from '../../src/core/types';
 
 const BASE_CONFIG: CacheConfig = {
@@ -23,7 +23,9 @@ function makeRunner<T>(
 }
 
 describe('QueryRunner', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -66,7 +68,12 @@ describe('QueryRunner', () => {
     });
 
     it('returns false when getter throws', () => {
-      const runner = makeRunner({ fn: vi.fn(), enabled: () => { throw new Error('boom'); } });
+      const runner = makeRunner({
+        fn: vi.fn(),
+        enabled: () => {
+          throw new Error('boom');
+        },
+      });
       expect(runner.isEnabled()).toBe(false);
     });
   });
@@ -154,7 +161,8 @@ describe('QueryRunner', () => {
 
   describe('retry', () => {
     it('retries once on failure and succeeds on second attempt', async () => {
-      const fn = vi.fn()
+      const fn = vi
+        .fn()
         .mockRejectedValueOnce(new Error('network error'))
         .mockResolvedValue(['data']);
       const runner = makeRunner({ fn }, { retry: 1 });
@@ -232,9 +240,7 @@ describe('QueryRunner', () => {
 
   describe('refetch', () => {
     it('triggers a new fetch regardless of staleness', async () => {
-      const fn = vi.fn()
-        .mockResolvedValueOnce('first')
-        .mockResolvedValueOnce('second');
+      const fn = vi.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
       const runner = makeRunner({ fn });
       runner.execute();
       await vi.runAllTimersAsync();
@@ -247,9 +253,7 @@ describe('QueryRunner', () => {
     });
 
     it('sets status to refreshing when data exists', async () => {
-      const fn = vi.fn()
-        .mockResolvedValueOnce('first')
-        .mockResolvedValue('second');
+      const fn = vi.fn().mockResolvedValueOnce('first').mockResolvedValue('second');
       const runner = makeRunner({ fn });
       runner.execute();
       await vi.runAllTimersAsync();

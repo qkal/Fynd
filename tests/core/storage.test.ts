@@ -1,15 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { persistCache, hydrateCache } from '../../src/core/storage';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { hydrateCache, persistCache } from '../../src/core/storage';
 import type { CacheEntry } from '../../src/core/types';
 
 function makeMockStorage(): Storage {
   const store = new Map<string, string>();
   return {
     getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => { store.set(key, value); },
-    removeItem: (key: string) => { store.delete(key); },
-    clear: () => { store.clear(); },
-    get length() { return store.size; },
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
     key: (index: number) => [...store.keys()][index] ?? null,
   };
 }
@@ -61,7 +69,9 @@ describe('persistCache + hydrateCache', () => {
   it('silently swallows persistCache write errors', () => {
     const brokenStorage = {
       ...makeMockStorage(),
-      setItem: () => { throw new Error('QuotaExceededError'); },
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
     };
     expect(() => persistCache(brokenStorage as Storage, new Map())).not.toThrow();
   });

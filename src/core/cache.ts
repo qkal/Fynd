@@ -1,5 +1,5 @@
-import type { CacheConfig, CacheEntry } from './types';
 import { hydrateCache, persistCache } from './storage';
+import type { CacheConfig, CacheEntry } from './types';
 
 type CacheSubscriber = () => void;
 
@@ -67,13 +67,16 @@ export class CacheStore {
     if (!this.subscribers.has(key)) {
       this.subscribers.set(key, new Set());
     }
-    this.subscribers.get(key)!.add(callback);
+    this.subscribers.get(key)?.add(callback);
     return () => {
       this.subscribers.get(key)?.delete(callback);
     };
   }
 
   private notify(key: string): void {
-    this.subscribers.get(key)?.forEach((cb) => cb());
+    const subs = this.subscribers.get(key);
+    if (subs) {
+      for (const cb of subs) cb();
+    }
   }
 }

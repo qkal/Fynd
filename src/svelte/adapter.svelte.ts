@@ -31,10 +31,18 @@ export function createReactiveQuery<T>(runner: QueryRunner<T>) {
   });
 
   return {
-    get status() { return state.status; },
-    get data() { return state.data; },
-    get error() { return state.error; },
-    get isStale() { return state.isStale; },
+    get status() {
+      return state.status;
+    },
+    get data() {
+      return state.data;
+    },
+    get error() {
+      return state.error;
+    },
+    get isStale() {
+      return state.isStale;
+    },
     refetch: () => runner.refetch(),
   };
 }

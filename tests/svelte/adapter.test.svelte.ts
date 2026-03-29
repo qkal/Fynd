@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QueryTest from './fixtures/QueryTest.svelte';
 
 describe('Svelte adapter', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -48,9 +50,7 @@ describe('Svelte adapter', () => {
   });
 
   it('triggers refetch on button click', async () => {
-    const fn = vi.fn()
-      .mockResolvedValueOnce('first')
-      .mockResolvedValueOnce('second');
+    const fn = vi.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
     render(QueryTest, { props: { fn } });
 
     await vi.runAllTimersAsync();
