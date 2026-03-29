@@ -1,8 +1,8 @@
-# Skoop — CLAUDE.md
+# Svelta — CLAUDE.md
 
 ## Identity
 
-You are building **Skoop** — a runes-native, SvelteKit-first data fetching & caching library.
+You are building **Svelta** — a runes-native, SvelteKit-first data fetching & caching library.
 Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Stack
@@ -15,7 +15,7 @@ Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Architecture
 
-Skoop has a **pure TypeScript core** and a **thin Svelte adapter**:
+Svelta has a **pure TypeScript core** and a **thin Svelte adapter**:
 
 ```
 src/
@@ -85,8 +85,8 @@ Returns a reactive object:
 
 ## What NOT to Do
 
-- Do NOT add `QueryClientProvider` or any wrapper component — Skoop uses explicit `createCache()`
+- Do NOT add `QueryClientProvider` or any wrapper component — Svelta uses explicit `createCache()`
 - Do NOT use Svelte stores (`writable`, `readable`) — this is runes-only (Svelte 5+)
 - Do NOT use `$:` reactive declarations — runes only (`$state`, `$derived`, `$effect`)
-- Do NOT add dependencies unless absolutely necessary — Skoop should be zero-dep
-- Do NOT use `createQuery()` naming — Skoop uses `cache.query()` to differentiate from TanStack
+- Do NOT add dependencies unless absolutely necessary — Svelta should be zero-dep
+- Do NOT use `createQuery()` naming — Svelta uses `cache.query()` to differentiate from TanStack

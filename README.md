@@ -1,11 +1,11 @@
-# Skoop
+# Svelta
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/skoop)](https://npmjs.com/package/skoop)
-[![license](https://img.shields.io/npm/l/skoop)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/svelta)](https://npmjs.com/package/svelta)
+[![license](https://img.shields.io/npm/l/svelta)](./LICENSE)
 
-## Why Skoop?
+## Why Svelta?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add skoop
+bun add svelta
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'skoop';
+import { createCache } from 'svelta';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
