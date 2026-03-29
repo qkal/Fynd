@@ -1,6 +1,6 @@
 import type { CacheEntry } from './types';
 
-const STORAGE_KEY = 'fynd-cache';
+const STORAGE_KEY = 'skoop-cache';
 
 /**
  * Persists the entire cache entry Map to storage under a single key.

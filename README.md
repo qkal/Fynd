@@ -1,11 +1,11 @@
-# Fynd
+# Skoop
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/fynd)](https://npmjs.com/package/fynd)
-[![license](https://img.shields.io/npm/l/fynd)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/skoop)](https://npmjs.com/package/skoop)
+[![license](https://img.shields.io/npm/l/skoop)](./LICENSE)
 
-## Why Fynd?
+## Why Skoop?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add fynd
+bun add skoop
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'fynd';
+import { createCache } from 'skoop';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
