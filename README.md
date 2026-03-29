@@ -1,11 +1,11 @@
-# Kvant
+# Swant
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/kvant)](https://npmjs.com/package/kvant)
-[![license](https://img.shields.io/npm/l/kvant)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/swant)](https://npmjs.com/package/swant)
+[![license](https://img.shields.io/npm/l/swant)](./LICENSE)
 
-## Why Kvant?
+## Why Swant?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add kvant
+bun add swant
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'kvant';
+import { createCache } from 'swant';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
