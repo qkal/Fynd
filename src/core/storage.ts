@@ -21,7 +21,7 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
 /**
  * Reconstructs a Map of cache entries from the provided Storage.
  *
- * Parses the stored JSON value at the module's STORAGE_KEY and includes only entries whose value is a non-array object containing a numeric `timestamp` property and a `data` property. Any missing, malformed, or unparsable storage content results in an empty Map.
+ * Parses the stored JSON value at the module's STORAGE_KEY and includes only entries whose value is a non-array object containing a numeric `timestamp` property, a `data` property, and—if present—an `error` property that is a string (otherwise the entry is rejected). Any missing, malformed, or unparsable storage content results in an empty Map.
  *
  * @returns A Map mapping cache keys to `CacheEntry` objects; returns an empty Map if storage is missing, empty, contains invalid JSON, or contains no valid entries.
  */
@@ -40,14 +40,29 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
         !Array.isArray(value) &&
         'timestamp' in value &&
         typeof value.timestamp === 'number' &&
-        'data' in value &&
-        'error' in value &&
-        (value.error === null || value.error instanceof Error)
+        'data' in value
       ) {
+        // Hydrate error: reconstruct Error from serialized plain object or set to null
+        let error: Error | null = null;
+        if ('error' in value && value.error !== null) {
+          if (typeof value.error === 'string') {
+            error = new Error(value.error);
+          } else if (
+            typeof value.error === 'object' &&
+            !Array.isArray(value.error) &&
+            'message' in value.error
+          ) {
+            error = new Error(String(value.error.message));
+            if ('name' in value.error && typeof value.error.name === 'string') {
+              error.name = value.error.name;
+            }
+          }
+        }
+
         const entry: CacheEntry = {
           data: value.data,
           timestamp: value.timestamp,
-          error: value.error,
+          error,
         };
         entries.push([key, entry]);
       }
