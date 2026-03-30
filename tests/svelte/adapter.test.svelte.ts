@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCache } from '../../src/index';
 import QueryTest from './fixtures/QueryTest.svelte';
 import ReactiveKeyTest from './fixtures/ReactiveKeyTest.svelte';
 import SelectTest from './fixtures/SelectTest.svelte';
@@ -184,6 +185,38 @@ describe('Svelte adapter', () => {
       await waitFor(() => expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'));
       // But the raw data ([1,2,3]) is in the cache
       expect(component.cache.getQueryData<number[]>('nums2')).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('prefetch', () => {
+    it('pre-loads data into the cache without creating a reactive result', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => [1, 2, 3]);
+      const cache = createCache({ refetchOnWindowFocus: false });
+
+      await cache.prefetch({ key: 'prefetch-test', fn });
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData<number[]>('prefetch-test')).toEqual([1, 2, 3]);
+    });
+
+    it('does not re-fetch if data is still fresh', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => 'data');
+      const cache = createCache({ refetchOnWindowFocus: false, staleTime: 60_000 });
+
+      await cache.prefetch({ key: 'prefetch-fresh', fn });
+      await cache.prefetch({ key: 'prefetch-fresh', fn });
+
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('silently discards fetch errors', async () => {
+      const fn = vi.fn(async () => {
+        throw new Error('network error');
+      });
+      const cache = createCache({ refetchOnWindowFocus: false });
+
+      await expect(cache.prefetch({ key: 'prefetch-error', fn })).resolves.toBeUndefined();
+      expect(cache.getQueryData('prefetch-error')).toBeUndefined();
     });
   });
 });

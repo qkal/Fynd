@@ -3,10 +3,7 @@ import { normalizeKey, serializeKey } from '../core/key';
 import { QueryRunner } from '../core/query';
 import type { CacheConfig, QueryConfig, QueryState } from '../core/types';
 
-function applySelect<T, U>(
-  state: QueryState<T>,
-  select?: (data: T) => U,
-): QueryState<T | U> {
+function applySelect<T, U>(state: QueryState<T>, select?: (data: T) => U): QueryState<T | U> {
   if (select !== undefined && state.data !== undefined) {
     return { ...state, data: select(state.data) };
   }
@@ -39,8 +36,7 @@ export function createReactiveQuery<T, U = T>(
   $effect(() => {
     // Resolve key — if it's a getter, calling it here registers reactive dependencies.
     // Svelte tracks all $state reads inside $effect and re-runs when they change.
-    const resolvedKey =
-      typeof queryConfig.key === 'function' ? queryConfig.key() : queryConfig.key;
+    const resolvedKey = typeof queryConfig.key === 'function' ? queryConfig.key() : queryConfig.key;
 
     const runner = new QueryRunner<T, U>(
       store,
@@ -60,7 +56,6 @@ export function createReactiveQuery<T, U = T>(
     // Set initial state with select applied
     state = applySelect(runner.getState(), queryConfig.select);
 
-    runner.reset();
     runner.execute();
 
     // refetchOnReconnect
