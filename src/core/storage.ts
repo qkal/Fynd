@@ -19,11 +19,11 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
 }
 
 /**
- * Hydrates a cache entry Map from storage.
- * Returns an empty Map if storage is empty, missing, or contains invalid JSON.
+ * Reconstructs a Map of cache entries from the provided Storage.
  *
- * @example
- * const entries = hydrateCache(localStorage);
+ * Parses the stored JSON value at the module's STORAGE_KEY and includes only entries whose value is a non-array object containing a numeric `timestamp` property, a `data` property, and—if present—an `error` property that is a string (otherwise the entry is rejected). Any missing, malformed, or unparsable storage content results in an empty Map.
+ *
+ * @returns A Map mapping cache keys to `CacheEntry` objects; returns an empty Map if storage is missing, empty, contains invalid JSON, or contains no valid entries.
  */
 export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
   try {
@@ -31,7 +31,44 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
     if (!raw) return new Map();
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map();
-    return new Map(Object.entries(parsed) as [string, CacheEntry][]);
+
+    const entries: [string, CacheEntry][] = [];
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        'timestamp' in value &&
+        typeof value.timestamp === 'number' &&
+        'data' in value
+      ) {
+        // Hydrate error: reconstruct Error from serialized plain object or set to null
+        let error: Error | null = null;
+        if ('error' in value && value.error !== null) {
+          if (typeof value.error === 'string') {
+            error = new Error(value.error);
+          } else if (
+            typeof value.error === 'object' &&
+            !Array.isArray(value.error) &&
+            'message' in value.error
+          ) {
+            error = new Error(String(value.error.message));
+            if ('name' in value.error && typeof value.error.name === 'string') {
+              error.name = value.error.name;
+            }
+          }
+        }
+
+        const entry: CacheEntry = {
+          data: value.data,
+          timestamp: value.timestamp,
+          error,
+        };
+        entries.push([key, entry]);
+      }
+    }
+
+    return new Map(entries);
   } catch {
     return new Map();
   }

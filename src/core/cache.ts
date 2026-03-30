@@ -15,6 +15,7 @@ type CacheSubscriber = () => void;
  */
 export class CacheStore {
   private readonly cache: Map<string, CacheEntry>;
+  private readonly keyArrays: Map<string, unknown[]> = new Map();
   private readonly subscribers: Map<string, Set<CacheSubscriber>> = new Map();
   private readonly config: Pick<CacheConfig, 'persist' | 'gcTime'>;
 
@@ -32,6 +33,8 @@ export class CacheStore {
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
+    // keyArrays is populated lazily: via set() for new keys, and on first
+    // invalidate() call for keys that were hydrated from persisted storage.
   }
 
   /** Returns the cached entry for `key`, or `undefined` if not present. */
@@ -41,6 +44,13 @@ export class CacheStore {
 
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
+    if (!this.keyArrays.has(key)) {
+      const parsed = JSON.parse(key) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error(`Cache key must serialize to an array, got: ${key}`);
+      }
+      this.keyArrays.set(key, parsed);
+    }
     this.cache.set(key, entry);
     this.keyArrays.delete(key); // clear cached parse on overwrite, or let lazy load handle it. Actually lazy load is fine. We can just delete to be safe.
     if (this.config.persist) {
@@ -145,21 +155,29 @@ export class CacheStore {
     }
 
     const invalidatedKeys: string[] = [];
-    for (const [key, entry] of this.cache) {
+    for (const key of this.cache.keys()) {
+      // Lazily populate keyArrays for keys hydrated from persisted storage.
       let keyArray = this.keyArrays.get(key);
       if (!keyArray) {
         try {
-          keyArray = JSON.parse(key) as unknown[];
-          if (!Array.isArray(keyArray)) continue;
+          const parsed = JSON.parse(key) as unknown;
+          if (!Array.isArray(parsed)) {
+            console.warn(`[kvale] Skipping corrupt cache key (not an array): ${key}`);
+            continue;
+          }
+          keyArray = parsed;
           this.keyArrays.set(key, keyArray);
         } catch {
-          continue; // Safe fallback on corrupted local storage
+          console.warn(`[kvale] Skipping cache key with invalid JSON: ${key}`);
+          continue;
         }
       }
-
       if (matchesKey(prefixArray, keyArray)) {
-        this.cache.set(key, { ...entry, timestamp: 0 });
-        invalidatedKeys.push(key);
+        const entry = this.cache.get(key);
+        if (entry) {
+          this.cache.set(key, { ...entry, timestamp: 0 });
+          invalidatedKeys.push(key);
+        }
       }
     }
     for (const key of invalidatedKeys) this.notify(key);
@@ -235,6 +253,7 @@ export class CacheStore {
     if (this.gcTimers.has(key)) return; // already scheduled — don't reset
     const timer = setTimeout(() => {
       this.cache.delete(key);
+      this.keyArrays.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
       this.keyArrays.delete(key);
