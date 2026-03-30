@@ -52,6 +52,21 @@ describe('Svelte adapter', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  it('does not fetch when refetch() is called on a disabled query', async () => {
+    const fn = vi.fn().mockResolvedValue('data');
+    render(QueryTest, { props: { fn, enabled: false } });
+
+    await vi.runAllTimersAsync();
+    expect(fn).not.toHaveBeenCalled();
+
+    // Click the refetch button — should be a no-op when disabled
+    fireEvent.click(screen.getByText('refetch'));
+    await vi.runAllTimersAsync();
+
+    expect(fn).not.toHaveBeenCalled();
+    expect(screen.getByTestId('status').textContent).toBe('idle');
+  });
+
   it('triggers refetch on button click', async () => {
     const fn = vi.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
     render(QueryTest, { props: { fn } });
