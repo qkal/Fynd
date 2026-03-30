@@ -26,6 +26,9 @@ export class CacheStore {
   private readonly keyRefs: Map<string, number> = new Map();
   private readonly gcTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
+  // Optimization: caches pre-parsed JSON keys
+  private readonly keyArrays: Map<string, unknown[]> = new Map();
+
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
@@ -39,6 +42,7 @@ export class CacheStore {
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
     this.cache.set(key, entry);
+    this.keyArrays.delete(key); // clear cached parse on overwrite, or let lazy load handle it. Actually lazy load is fine. We can just delete to be safe.
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -58,6 +62,7 @@ export class CacheStore {
   /** Removes the entry for `key` and notifies subscribers. No-op if key does not exist. */
   delete(key: string): void {
     this.cache.delete(key);
+    this.keyArrays.delete(key);
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -68,6 +73,7 @@ export class CacheStore {
   clear(): void {
     const keys = [...this.cache.keys()];
     this.cache.clear();
+    this.keyArrays.clear();
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -130,10 +136,27 @@ export class CacheStore {
    * `["todos"]`, `["todos",1]`, `["todos","active"]`, etc.
    */
   invalidate(serializedPrefix: string): void {
-    const prefixArray = JSON.parse(serializedPrefix) as unknown[];
+    let prefixArray: unknown[];
+    try {
+      prefixArray = JSON.parse(serializedPrefix) as unknown[];
+      if (!Array.isArray(prefixArray)) return;
+    } catch {
+      return; // Safe fallback on invalid JSON prefix
+    }
+
     const invalidatedKeys: string[] = [];
     for (const [key, entry] of this.cache) {
-      const keyArray = JSON.parse(key) as unknown[];
+      let keyArray = this.keyArrays.get(key);
+      if (!keyArray) {
+        try {
+          keyArray = JSON.parse(key) as unknown[];
+          if (!Array.isArray(keyArray)) continue;
+          this.keyArrays.set(key, keyArray);
+        } catch {
+          continue; // Safe fallback on corrupted local storage
+        }
+      }
+
       if (matchesKey(prefixArray, keyArray)) {
         this.cache.set(key, { ...entry, timestamp: 0 });
         invalidatedKeys.push(key);
@@ -214,6 +237,7 @@ export class CacheStore {
       this.cache.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
+      this.keyArrays.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);
     }, this.config.gcTime);
     this.gcTimers.set(key, timer);
