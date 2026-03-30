@@ -78,6 +78,16 @@ describe('QueryRunner', () => {
       });
       expect(runner.isEnabled()).toBe(false);
     });
+
+    it('returns false when accessing enabled throws', () => {
+      const runner = makeRunner({
+        fn: vi.fn(),
+        get enabled() {
+          throw new Error('access error');
+        },
+      } as any);
+      expect(runner.isEnabled()).toBe(false);
+    });
   });
 
   describe('execute — cache miss (loading)', () => {
@@ -237,6 +247,21 @@ describe('QueryRunner', () => {
       runner.execute();
       await vi.runAllTimersAsync();
       expect(runner.getState().status).toBe('success');
+    });
+
+    it('does not execute when enabled getter throws', async () => {
+      const fn = vi.fn();
+      const runner = makeRunner({
+        fn,
+        enabled: () => {
+          throw new Error('boom');
+        },
+      });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).not.toHaveBeenCalled();
+      expect(runner.getState().status).toBe('idle');
     });
   });
 
