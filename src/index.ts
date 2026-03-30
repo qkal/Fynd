@@ -1,5 +1,5 @@
 import { CacheStore } from './core/cache';
-import { QueryRunner } from './core/query';
+import { normalizeKey, serializeKey } from './core/key';
 import { CACHE_DEFAULTS } from './core/types';
 import type { CacheConfig, QueryConfig } from './core/types';
 import { createReactiveQuery } from './svelte/adapter.svelte';
@@ -44,8 +44,20 @@ export function createCache(config: Partial<CacheConfig> = {}) {
      * // In template: {#if todos.status === 'loading'}
      */
     query<T>(queryConfig: QueryConfig<T>): QueryResult<T> {
-      const runner = new QueryRunner<T>(store, queryConfig, resolvedConfig);
-      return createReactiveQuery(runner) as QueryResult<T>;
+      return createReactiveQuery(store, queryConfig, resolvedConfig) as QueryResult<T>;
+    },
+
+    /**
+     * Returns the raw cached data for `key`, or `undefined` if not present.
+     * Does not trigger a fetch. Accepts string or array keys.
+     *
+     * @example
+     * cache.getQueryData<Todo[]>('todos')
+     * cache.getQueryData<Todo>(['todos', 1])
+     */
+    getQueryData<T>(key: string | unknown[]): T | undefined {
+      const serialized = serializeKey(normalizeKey(key));
+      return store.getQueryData<T>(serialized);
     },
   };
 }

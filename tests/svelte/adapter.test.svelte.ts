@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QueryTest from './fixtures/QueryTest.svelte';
+import ReactiveKeyTest from './fixtures/ReactiveKeyTest.svelte';
+import SelectTest from './fixtures/SelectTest.svelte';
 
 describe('Svelte adapter', () => {
   beforeEach(() => {
@@ -59,5 +61,70 @@ describe('Svelte adapter', () => {
     fireEvent.click(screen.getByText('refetch'));
     await vi.runAllTimersAsync();
     await waitFor(() => expect(screen.getByTestId('data').textContent).toBe('"second"'));
+  });
+
+  describe('reactive keys', () => {
+    it('re-fetches when key getter returns a new value', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => 'user-data');
+      const { component } = render(ReactiveKeyTest, { props: { fn } });
+
+      await vi.runAllTimersAsync();
+      await waitFor(() =>
+        expect(screen.getByTestId('data').textContent).toBe('"user-data"'),
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      component.setUserId(2);
+      await vi.runAllTimersAsync();
+      await waitFor(() =>
+        expect(fn).toHaveBeenCalledTimes(2),
+      );
+    });
+  });
+
+  describe('keepPreviousData', () => {
+    it('shows previous data while re-fetching on key change instead of loading', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => 'user-data');
+      const { component } = render(ReactiveKeyTest, {
+        props: { fn, keepPreviousData: true },
+      });
+
+      await vi.runAllTimersAsync();
+      await waitFor(() =>
+        expect(screen.getByTestId('data').textContent).toBe('"user-data"'),
+      );
+
+      component.setUserId(2);
+      // After key change but before fetch completes, status should not be 'loading'
+      expect(screen.getByTestId('status').textContent).not.toBe('loading');
+
+      await vi.runAllTimersAsync();
+      await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+    });
+  });
+
+  describe('select', () => {
+    it('delivers transformed data to the component', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => [1, 2, 3]);
+      render(SelectTest, { props: { fn, cacheKey: 'nums' } });
+
+      await vi.runAllTimersAsync();
+      await waitFor(() =>
+        expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'),
+      );
+    });
+
+    it('stores raw data in cache, not selected data', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => [1, 2, 3]);
+      const { component } = render(SelectTest, { props: { fn, cacheKey: 'nums2' } });
+
+      await vi.runAllTimersAsync();
+      // The selected data ([2,4,6]) is shown in the DOM
+      await waitFor(() =>
+        expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'),
+      );
+      // But the raw data ([1,2,3]) is in the cache
+      expect(component.cache.getQueryData<number[]>('nums2')).toEqual([1, 2, 3]);
+    });
   });
 });
