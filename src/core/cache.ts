@@ -27,9 +27,6 @@ export class CacheStore {
   private readonly keyRefs: Map<string, number> = new Map();
   private readonly gcTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
-  // Optimization: caches pre-parsed JSON keys
-  private readonly keyArrays: Map<string, unknown[]> = new Map();
-
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
@@ -149,8 +146,12 @@ export class CacheStore {
     let prefixArray: unknown[];
     try {
       prefixArray = JSON.parse(serializedPrefix) as unknown[];
-      if (!Array.isArray(prefixArray)) return;
+      if (!Array.isArray(prefixArray)) {
+        console.warn(`[kvale] invalidate() received non-array prefix: ${serializedPrefix}`);
+        return;
+      }
     } catch {
+      console.warn(`[kvale] invalidate() received invalid JSON prefix: ${serializedPrefix}`);
       return; // Safe fallback on invalid JSON prefix
     }
 
