@@ -218,5 +218,23 @@ describe('Svelte adapter', () => {
       await expect(cache.prefetch({ key: 'prefetch-error', fn })).resolves.toBeUndefined();
       expect(cache.getQueryData('prefetch-error')).toBeUndefined();
     });
+
+    it('deduplicates concurrent prefetches for the same key to a single fn call', async () => {
+      let resolve: (v: string) => void;
+      const fn = vi.fn(
+        () => new Promise<string>((r) => { resolve = r; }),
+      );
+      const cache = createCache({ refetchOnWindowFocus: false });
+
+      const p1 = cache.prefetch({ key: 'prefetch-dedup', fn });
+      const p2 = cache.prefetch({ key: 'prefetch-dedup', fn });
+
+      resolve!('shared');
+      await vi.runAllTimersAsync();
+      await Promise.all([p1, p2]);
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData('prefetch-dedup')).toBe('shared');
+    });
   });
 });

@@ -123,12 +123,28 @@ export function createCache(config: Partial<CacheConfig> = {}) {
       const serialized = serializeKey(normalized);
       const staleTime = prefetchConfig.staleTime ?? resolvedConfig.staleTime;
       if (!store.isStale(serialized, staleTime)) return;
+
+      // Deduplicate: attach to existing in-flight promise if present
+      const existing = store.getInFlight(serialized);
+      if (existing) {
+        try {
+          await existing;
+        } catch {
+          // best-effort — caller doesn't need the error
+        }
+        return;
+      }
+
       const controller = new AbortController();
+      const promise = prefetchConfig.fn(controller.signal);
+      store.setInFlight(serialized, promise, controller);
       try {
-        const data = await prefetchConfig.fn(controller.signal);
+        const data = await promise;
         store.set(serialized, { data, timestamp: Date.now(), error: null });
       } catch {
         // prefetch is best-effort — silently discard failures
+      } finally {
+        store.clearInFlight(serialized);
       }
     },
 
