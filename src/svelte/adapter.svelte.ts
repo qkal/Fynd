@@ -1,31 +1,79 @@
-import type { QueryRunner } from '../core/query';
-import type { QueryState } from '../core/types';
+import type { CacheStore } from '../core/cache';
+import { normalizeKey, serializeKey } from '../core/key';
+import { QueryRunner } from '../core/query';
+import type { CacheConfig, QueryConfig, QueryState } from '../core/types';
+
+function applySelect<T, U>(state: QueryState<T>, select?: (data: T) => U): QueryState<T | U> {
+  if (select !== undefined && state.data !== undefined) {
+    return { ...state, data: select(state.data) };
+  }
+  return state;
+}
 
 /**
- * Bridges a QueryRunner into Svelte 5 reactive getters using `$state` and `$effect`.
- * The returned object uses getters so that property access reads from reactive state.
- * Automatically cleans up the runner on component unmount via `$effect` return.
+ * Bridges a QueryConfig into Svelte 5 reactive getters using `$state` and `$effect`.
+ * Creates a new QueryRunner internally. Handles reactive key changes by destroying
+ * and recreating the runner when the key getter returns a new value.
  *
  * @example
- * const runner = new QueryRunner(store, config, cacheConfig);
- * return createReactiveQuery(runner);
+ * const result = createReactiveQuery(store, { key: 'todos', fn }, cacheConfig);
+ * // result.data, result.status, result.error, result.isStale are all reactive getters
  */
-export function createReactiveQuery<T>(runner: QueryRunner<T>) {
-  let state = $state<QueryState<T>>(runner.getState());
+export function createReactiveQuery<T, U = T>(
+  store: CacheStore,
+  queryConfig: QueryConfig<T, U>,
+  cacheConfig: CacheConfig,
+) {
+  let state = $state<QueryState<T | U>>({
+    status: 'idle',
+    data: undefined,
+    error: null,
+    isStale: false,
+  });
+  let currentRunner: QueryRunner<T, U> | null = null;
+  let previousData: T | undefined = undefined;
 
   $effect(() => {
-    // Reading runner.isEnabled() here registers reactive dependencies.
-    // If enabled is a getter closing over $state, Svelte tracks it and
-    // re-runs this effect when it changes — enabling dependent queries.
+    // Resolve key — if it's a getter, calling it here registers reactive dependencies.
+    // Svelte tracks all $state reads inside $effect and re-runs when they change.
+    const resolvedKey = typeof queryConfig.key === 'function' ? queryConfig.key() : queryConfig.key;
+
+    const runner = new QueryRunner<T, U>(
+      store,
+      { ...queryConfig, key: resolvedKey },
+      cacheConfig,
+      queryConfig.keepPreviousData ? previousData : undefined,
+    );
+    currentRunner = runner;
+
     if (!runner.isEnabled()) return;
 
     const unsubscribe = runner.subscribe((newState) => {
-      state = newState;
+      if (newState.data !== undefined) previousData = newState.data as T;
+      state = applySelect(newState, queryConfig.select);
     });
-    runner.reset();
+
+    // Set initial state with select applied
+    state = applySelect(runner.getState(), queryConfig.select);
+
     runner.execute();
 
+    // refetchOnReconnect
+    let reconnectHandler: (() => void) | undefined;
+    if (cacheConfig.refetchOnReconnect && typeof window !== 'undefined') {
+      reconnectHandler = () => {
+        const staleTime = queryConfig.staleTime ?? cacheConfig.staleTime;
+        const key = serializeKey(normalizeKey(resolvedKey));
+        if (store.isStale(key, staleTime)) {
+          void runner.refetch();
+        }
+      };
+      window.addEventListener('online', reconnectHandler);
+    }
+
     return () => {
+      if (reconnectHandler) window.removeEventListener('online', reconnectHandler);
+      if (runner.getState().data !== undefined) previousData = runner.getState().data as T;
       unsubscribe();
       runner.destroy();
     };
@@ -36,7 +84,7 @@ export function createReactiveQuery<T>(runner: QueryRunner<T>) {
       return state.status;
     },
     get data() {
-      return state.data;
+      return state.data as U | undefined;
     },
     get error() {
       return state.error;
@@ -44,6 +92,9 @@ export function createReactiveQuery<T>(runner: QueryRunner<T>) {
     get isStale() {
       return state.isStale;
     },
-    refetch: () => runner.refetch(),
+    refetch: (): Promise<void> => {
+      if (!currentRunner?.isEnabled()) return Promise.resolve();
+      return currentRunner.refetch();
+    },
   };
 }

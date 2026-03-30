@@ -2,13 +2,19 @@
 import { createCache } from '../../../src/index';
 
 interface Props {
-  fn: () => Promise<unknown>;
+  fn: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean | (() => boolean);
+  staleTime?: number;
+  refetchOnReconnect?: boolean;
 }
 
-const { fn, enabled }: Props = $props();
+const { fn, enabled, staleTime, refetchOnReconnect = true }: Props = $props();
 
-const cache = createCache({ refetchOnWindowFocus: false });
+const cache = createCache({
+  refetchOnWindowFocus: false,
+  ...(staleTime !== undefined && { staleTime }),
+  ...(refetchOnReconnect !== undefined && { refetchOnReconnect }),
+});
 const result = cache.query({ key: 'test', fn, enabled });
 </script>
 
