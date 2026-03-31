@@ -140,4 +140,34 @@ describe('MutationRunner', () => {
       expect(cb).not.toHaveBeenCalled();
     });
   });
+
+  describe('global cacheOnError hook', () => {
+    it('fires with key [] after mutation failure, after onSettled', async () => {
+      const order: string[] = [];
+      const fn = vi.fn(async () => {
+        throw new Error('mutation fail');
+      });
+      const onSettled = vi.fn(() => { order.push('onSettled'); });
+      const cacheOnError = vi.fn(() => { order.push('cacheOnError'); });
+      const runner = new MutationRunner({ fn, onSettled }, cacheOnError);
+      await runner.mutate('vars');
+      expect(cacheOnError).toHaveBeenCalledWith(expect.any(Error), []);
+      expect(order).toEqual(['onSettled', 'cacheOnError']);
+    });
+
+    it('does not fire when mutation succeeds', async () => {
+      const fn = vi.fn(async () => 'ok');
+      const cacheOnError = vi.fn();
+      const runner = new MutationRunner({ fn }, cacheOnError);
+      await runner.mutate('vars');
+      expect(cacheOnError).not.toHaveBeenCalled();
+    });
+
+    it('silently swallows if cacheOnError throws', async () => {
+      const fn = vi.fn(async () => { throw new Error('fail'); });
+      const cacheOnError = vi.fn(() => { throw new Error('hook fail'); });
+      const runner = new MutationRunner({ fn }, cacheOnError);
+      await expect(runner.mutate('vars')).resolves.not.toThrow();
+    });
+  });
 });

@@ -20,7 +20,14 @@ export class MutationRunner<TData, TVariables, TContext = unknown> {
   private readonly subscribers: Set<MutationSubscriber<TData>> = new Set();
   private abortController: AbortController | undefined;
 
-  constructor(private readonly config: MutationConfig<TData, TVariables, TContext>) {
+  constructor(
+    private readonly config: MutationConfig<TData, TVariables, TContext>,
+    /**
+     * Global error hook from `CacheConfig.onError`. Fired after `onSettled` on failure,
+     * with `key: []` (mutations have no cache key). Errors are silently swallowed.
+     */
+    private readonly cacheOnError?: (error: Error, key: unknown[]) => void,
+  ) {
     this.state = { status: 'idle', data: undefined, error: null };
   }
 
@@ -72,6 +79,11 @@ export class MutationRunner<TData, TVariables, TContext = unknown> {
       this.setState({ status: 'error', data: undefined, error });
       await this.config.onError?.(error, variables, context as TContext);
       await this.config.onSettled?.(undefined, error, variables, context as TContext);
+      try {
+        this.cacheOnError?.(error, []);
+      } catch {
+        // silently swallow
+      }
     }
   }
 

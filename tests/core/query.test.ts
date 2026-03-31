@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CacheStore } from '../../src/core/cache';
 import { QueryRunner } from '../../src/core/query';
-import type { CacheConfig, QueryConfig } from '../../src/core/types';
+import type { CacheConfig, CacheEvent, QueryConfig } from '../../src/core/types';
 
 const BASE_CONFIG: CacheConfig = {
   staleTime: 30_000,
@@ -558,6 +558,187 @@ describe('QueryRunner', () => {
       runner.execute();
       expect(runner.getState().status).toBe('loading');
       expect(runner.getState().data).toBeUndefined();
+    });
+  });
+
+  describe('retry as function', () => {
+    it('does not retry when function returns false', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const retry = vi.fn().mockReturnValue(false);
+      const runner = makeRunner({ fn }, { retry });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(runner.getState().status).toBe('error');
+    });
+
+    it('retries while function returns true', async () => {
+      let calls = 0;
+      const fn = vi.fn(async () => {
+        if (++calls < 3) throw new Error('fail');
+        return 'ok';
+      });
+      const runner = makeRunner({ fn }, { retry: (_count: number) => calls < 3 });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+      expect(fn).toHaveBeenCalledTimes(3);
+    });
+
+    it('retry as number still works (normalized internally)', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const runner = makeRunner({ fn }, { retry: 2 });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
+      expect(runner.getState().status).toBe('error');
+    });
+  });
+
+  describe('timeout', () => {
+    it('aborts fetch after timeout ms and sets error with correct message', async () => {
+      const fn = vi.fn(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('data'), 10_000)),
+      );
+      const runner = makeRunner({ fn }, { retry: 0, timeout: 1_000 });
+      runner.execute();
+      await vi.advanceTimersByTimeAsync(1_001);
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('error');
+      expect(runner.getState().error?.message).toBe('Request timed out');
+    });
+
+    it('per-query timeout overrides global timeout', async () => {
+      const fn = vi.fn(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('data'), 5_000)),
+      );
+      const runner = makeRunner({ fn, timeout: 500 }, { retry: 0, timeout: 10_000 });
+      runner.execute();
+      await vi.advanceTimersByTimeAsync(501);
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('error');
+      expect(runner.getState().error?.message).toBe('Request timed out');
+    });
+
+    it('each retry gets a fresh timeout (prior timeout does not block retry)', async () => {
+      let calls = 0;
+      const fn = vi.fn(async (signal: AbortSignal) => {
+        calls++;
+        if (calls < 3) {
+          return new Promise<string>((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('aborted')));
+            setTimeout(() => reject(new Error('slow')), 10_000);
+          });
+        }
+        return 'ok';
+      });
+      const runner = makeRunner({ fn }, { retry: 3, timeout: 500 });
+      runner.execute();
+      // First timeout fires at 500ms
+      await vi.advanceTimersByTimeAsync(500);
+      // Backoff 1000ms, then second attempt times out at another 500ms
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(500);
+      // Backoff 2000ms, third attempt succeeds
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+      expect(fn).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('onError hook', () => {
+    it('fires once after all retries exhausted', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onError = vi.fn();
+      const runner = makeRunner({ fn }, { retry: 1, onError });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not fire when the query eventually succeeds', async () => {
+      let calls = 0;
+      const fn = vi.fn(async () => {
+        if (++calls < 2) throw new Error('transient');
+        return 'ok';
+      });
+      const onError = vi.fn();
+      const runner = makeRunner({ fn }, { retry: 2, onError });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(onError).not.toHaveBeenCalled();
+      expect(runner.getState().status).toBe('success');
+    });
+
+    it('receives correct error and key array', async () => {
+      const error = new Error('network fail');
+      const fn = vi.fn().mockRejectedValue(error);
+      const onError = vi.fn();
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
+      const runner = new QueryRunner(
+        store,
+        { key: ['todos', 1], fn },
+        { ...BASE_CONFIG, retry: 0, onError },
+      );
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(onError).toHaveBeenCalledWith(error, ['todos', 1]);
+    });
+
+    it('silently swallows if onError hook itself throws', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onError = vi.fn(() => {
+        throw new Error('hook error');
+      });
+      const runner = makeRunner({ fn }, { retry: 0, onError });
+      runner.execute();
+      await expect(vi.runAllTimersAsync()).resolves.not.toThrow();
+      expect(runner.getState().status).toBe('error');
+    });
+  });
+
+  describe('onEvent — fetch events', () => {
+    it('fires fetch:start when a fetch begins', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const onEvent = vi.fn();
+      const runner = makeRunner({ fn }, { onEvent });
+      runner.execute();
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'fetch:start' }));
+      await vi.runAllTimersAsync();
+    });
+
+    it('fires fetch:success with duration >= 0', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const onEvent = vi.fn();
+      const runner = makeRunner({ fn }, { onEvent });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      const successEvent = onEvent.mock.calls
+        .map((args: unknown[]) => args[0] as CacheEvent)
+        .find((e) => e.type === 'fetch:success');
+      expect(successEvent).toBeDefined();
+      expect((successEvent as { type: 'fetch:success'; key: unknown[]; duration: number }).duration).toBeGreaterThanOrEqual(0);
+    });
+
+    it('fires fetch:error on each failed attempt with correct failureCount', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const onEvent = vi.fn();
+      const runner = makeRunner({ fn }, { retry: 2, onEvent });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      const errorEvents = onEvent.mock.calls
+        .map((args: unknown[]) => args[0] as CacheEvent)
+        .filter((e) => e.type === 'fetch:error') as Array<{
+          type: 'fetch:error';
+          key: unknown[];
+          error: Error;
+          failureCount: number;
+        }>;
+      expect(errorEvents).toHaveLength(3);
+      expect(errorEvents[0].failureCount).toBe(0);
+      expect(errorEvents[1].failureCount).toBe(1);
+      expect(errorEvents[2].failureCount).toBe(2);
     });
   });
 });

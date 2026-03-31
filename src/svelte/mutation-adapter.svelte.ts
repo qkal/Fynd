@@ -3,19 +3,13 @@ import type { MutationConfig, MutationState } from '../core/types';
 
 /**
  * Wraps a MutationRunner in Svelte 5 `$state` reactivity.
- * Call inside a component (runes context) — `$state` and `$effect` require it.
- *
- * @example
- * const deleteTodo = createReactiveMutation({
- *   fn: (id: number, signal) => fetch(`/api/todos/${id}`, { method: 'DELETE', signal }),
- *   onSettled: () => cache.invalidate('todos'),
- * });
- * // In template: {#if deleteTodo.status === 'loading'}
+ * Accepts the global `cacheOnError` from the resolved CacheConfig.
  */
 export function createReactiveMutation<TData, TVariables, TContext = unknown>(
   config: MutationConfig<TData, TVariables, TContext>,
+  cacheOnError?: (error: Error, key: unknown[]) => void,
 ) {
-  const runner = new MutationRunner<TData, TVariables, TContext>(config);
+  const runner = new MutationRunner<TData, TVariables, TContext>(config, cacheOnError);
   let state = $state<MutationState<TData>>(runner.getState());
 
   const unsubscribe = runner.subscribe((newState) => {
