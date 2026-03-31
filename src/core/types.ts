@@ -13,6 +13,39 @@ export type QueryStatus = 'idle' | 'loading' | 'refreshing' | 'success' | 'error
 export type MutationStatus = 'idle' | 'loading' | 'success' | 'error';
 
 /**
+ * A lifecycle event emitted by the cache. Subscribe via `createCache({ onEvent })`.
+ *
+ * - `fetch:start`   A network request began (not fired for dedup consumers).
+ * - `fetch:success` A network request completed successfully.
+ * - `fetch:error`   A network request failed (fires on every attempt, including retries).
+ * - `invalidate`    `cache.invalidate()` was called; lists every matched key.
+ * - `set`           `cache.setQueryData()` wrote data directly.
+ * - `gc`            A cache entry was pruned by gcTime.
+ * - `rehydrate`     `cache.rehydrate()` seeded entries from a server snapshot.
+ */
+export type CacheEvent =
+  | { type: 'fetch:start'; key: unknown[] }
+  | { type: 'fetch:success'; key: unknown[]; duration: number }
+  | { type: 'fetch:error'; key: unknown[]; error: Error; failureCount: number }
+  | { type: 'invalidate'; key: unknown[]; matchedKeys: unknown[][] }
+  | { type: 'set'; key: unknown[] }
+  | { type: 'gc'; key: unknown[] }
+  | { type: 'rehydrate'; keys: unknown[][] };
+
+/**
+ * Serializable snapshot of cache entries produced by `cache.dehydrate()`.
+ * Pass it through SvelteKit's `load()` return value, then seed the client
+ * cache with `cache.rehydrate(data.dehydrated)`.
+ */
+export interface DehydratedState {
+  entries: Array<{
+    key: string; // serialized cache key
+    data: unknown; // raw T — never transformed by select
+    timestamp: number; // original server-side timestamp
+  }>;
+}
+
+/**
  * Global cache configuration, passed to `createCache()`.
  *
  * @example
@@ -21,8 +54,15 @@ export type MutationStatus = 'idle' | 'loading' | 'success' | 'error';
 export interface CacheConfig {
   /** Milliseconds before cached data is considered stale. Default: 30_000 */
   staleTime: number;
-  /** Number of retry attempts on fetch failure. Default: 1 */
-  retry: number;
+  /**
+   * Retry strategy on fetch failure. Pass a number for a fixed retry count,
+   * or a function for conditional retries (e.g. skip retrying 401s).
+   * Default: 1
+   *
+   * @example
+   * retry: (count, error) => (error as any).status !== 401 && count < 3
+   */
+  retry: number | ((failureCount: number, error: Error) => boolean);
   /** Refetch stale queries when the browser tab regains focus. Default: true */
   refetchOnWindowFocus: boolean;
   /** Refetch stale queries when the browser comes back online. Default: true */
@@ -34,6 +74,21 @@ export interface CacheConfig {
    * Default: 300_000 (5 minutes)
    */
   gcTime: number;
+  /**
+   * Abort any fetch that has not resolved within this many milliseconds.
+   * Each retry attempt gets its own fresh timeout. Default: undefined (no timeout).
+   */
+  timeout?: number;
+  /**
+   * Called once after all retries are exhausted for a query, or after a mutation fails.
+   * Mutations pass `key: []`. Errors thrown by this hook are silently swallowed.
+   */
+  onError?: (error: Error, key: unknown[]) => void;
+  /**
+   * Called for every cache lifecycle event, including intermediate retry failures.
+   * Errors thrown by this hook are silently swallowed.
+   */
+  onEvent?: (event: CacheEvent) => void;
 }
 
 /**
@@ -77,6 +132,16 @@ export interface QueryConfig<T, U = T> {
    * The component receives `U`. Type changes: `cache.query<Todo[], ActiveTodo[]>({ select: ... })`.
    */
   select?: (data: T) => U;
+  /**
+   * Per-query retry override. Overrides `CacheConfig.retry` for this query only.
+   * Accepts a number or a predicate function.
+   */
+  retry?: number | ((failureCount: number, error: Error) => boolean);
+  /**
+   * Abort this query's fetch after N milliseconds. Each retry gets a fresh timeout.
+   * Overrides `CacheConfig.timeout` for this query only.
+   */
+  timeout?: number;
 }
 
 /**
@@ -109,9 +174,7 @@ export interface MutationConfig<TData, TVariables, TContext = unknown> {
   ) => void | Promise<void>;
 }
 
-/**
- * Internal reactive state of a query.
- */
+/** Internal reactive state of a query. */
 export interface QueryState<T> {
   status: QueryStatus;
   data: T | undefined;
@@ -119,18 +182,14 @@ export interface QueryState<T> {
   isStale: boolean;
 }
 
-/**
- * Internal reactive state of a mutation.
- */
+/** Internal reactive state of a mutation. */
 export interface MutationState<TData> {
   status: MutationStatus;
   data: TData | undefined;
   error: Error | null;
 }
 
-/**
- * A single cached entry stored in CacheStore.
- */
+/** A single cached entry stored in CacheStore. */
 export interface CacheEntry<T = unknown> {
   data: T;
   timestamp: number;
