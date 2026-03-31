@@ -1,6 +1,6 @@
 import type { CacheStore } from './cache';
 import { normalizeKey, serializeKey } from './key';
-import type { CacheConfig, QueryConfig, QueryState, QuerySubscriber } from './types';
+import type { CacheConfig, CacheEvent, QueryConfig, QueryState, QuerySubscriber } from './types';
 
 /**
  * Orchestrates the full query lifecycle: cache lookup, fetch, retry, polling,
@@ -13,7 +13,10 @@ import type { CacheConfig, QueryConfig, QueryState, QuerySubscriber } from './ty
  */
 export class QueryRunner<T, U = T> {
   private readonly serializedKey: string;
+  private readonly keyArray: unknown[];
   private readonly staleTime: number;
+  private readonly retryFn: (failureCount: number, error: Error) => boolean;
+  private readonly queryTimeout: number | undefined;
   private state: QueryState<T>;
   private readonly subscribers: Set<QuerySubscriber<T>> = new Set();
   private intervalId: ReturnType<typeof setInterval> | undefined;
@@ -32,7 +35,15 @@ export class QueryRunner<T, U = T> {
     const key = typeof config.key === 'function' ? config.key() : config.key;
     const normalized = normalizeKey(key);
     this.serializedKey = serializeKey(normalized);
+    this.keyArray = normalized;
     this.staleTime = config.staleTime ?? cacheConfig.staleTime;
+
+    // Normalize retry to a predicate function — checked once, never branched again
+    const retry = config.retry ?? cacheConfig.retry;
+    this.retryFn =
+      typeof retry === 'number' ? (count) => count < (retry as number) : retry;
+
+    this.queryTimeout = config.timeout ?? cacheConfig.timeout;
 
     const cached = store.get(this.serializedKey);
     const isStale = store.isStale(this.serializedKey, this.staleTime);
@@ -181,6 +192,9 @@ export class QueryRunner<T, U = T> {
       return;
     }
 
+    this.emitEvent({ type: 'fetch:start', key: this.keyArray });
+    const fetchStartTime = Date.now();
+
     // Build the full retry-chain promise (resolves with T or rejects after all retries)
     const retryChain = this.executeWithRetry(0, signal);
     this.store.setInFlight(this.serializedKey, retryChain, this.abortController);
@@ -189,6 +203,7 @@ export class QueryRunner<T, U = T> {
       const data = await retryChain;
       this.store.clearInFlight(this.serializedKey);
       if (this.destroyed || signal.aborted) return;
+      this.emitEvent({ type: 'fetch:success', key: this.keyArray, duration: Date.now() - fetchStartTime });
       this.store.set(this.serializedKey, { data, timestamp: Date.now(), error: null });
       this.setState({ status: 'success', data, error: null, isStale: false });
     } catch (err) {
@@ -196,14 +211,22 @@ export class QueryRunner<T, U = T> {
       if (this.destroyed || signal.aborted) return;
       const error = err instanceof Error ? err : new Error(String(err));
       this.setState({ ...this.state, status: 'error', error });
+      try {
+        this.cacheConfig.onError?.(error, this.keyArray);
+      } catch {
+        // silently swallow
+      }
     }
   }
 
   private async executeWithRetry(attempt: number, signal: AbortSignal): Promise<T> {
     try {
-      return await this.config.fn(signal);
+      return await this.fetchOnce(signal);
     } catch (err) {
-      if (attempt < this.cacheConfig.retry && !signal.aborted) {
+      if (signal.aborted) throw err;
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.emitEvent({ type: 'fetch:error', key: this.keyArray, error, failureCount: attempt });
+      if (this.retryFn(attempt, error) && !signal.aborted) {
         const delay = Math.min(1000 * 2 ** attempt, 30_000);
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
         if (signal.aborted) throw err;
@@ -211,6 +234,33 @@ export class QueryRunner<T, U = T> {
       }
       throw err;
     }
+  }
+
+  /**
+   * Wraps a single `fn()` call with an optional per-attempt timeout.
+   * Uses a per-attempt AbortController so timeouts don't prevent retries.
+   * The main `signal` abort (from destroy/cancel) propagates to the attempt controller.
+   */
+  private fetchOnce(signal: AbortSignal): Promise<T> {
+    if (!this.queryTimeout) return this.config.fn(signal);
+
+    const attemptController = new AbortController();
+    const onMainAbort = () => attemptController.abort();
+    signal.addEventListener('abort', onMainAbort, { once: true });
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        signal.removeEventListener('abort', onMainAbort);
+        attemptController.abort();
+        reject(new Error('Request timed out'));
+      }, this.queryTimeout!);
+    });
+
+    return Promise.race([this.config.fn(attemptController.signal), timeoutPromise]).finally(() => {
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onMainAbort);
+    });
   }
 
   private setupSideEffects(): void {
@@ -240,5 +290,13 @@ export class QueryRunner<T, U = T> {
   private setState(next: QueryState<T>): void {
     this.state = next;
     for (const cb of this.subscribers) cb(next);
+  }
+
+  private emitEvent(event: CacheEvent): void {
+    try {
+      this.cacheConfig.onEvent?.(event);
+    } catch {
+      // silently swallow
+    }
   }
 }
