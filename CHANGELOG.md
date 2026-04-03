@@ -6,7 +6,7 @@
 - **Bug:** `CacheStore.set()` incorrectly deleted parsed key arrays immediately after caching them, forcing redundant re-parsing on every subsequent invalidation
 - **Bug:** Duplicate `keyArrays.delete(key)` call in `startGcTimer` cleanup
 - **Test:** Timestamp race condition in security test for corrupted cache keys
-- **Test:** Added jsdom environment for `security.test.ts` to match its DOM requirements
+- **Test:** Set Vitest environment to `jsdom` globally so DOM-dependent tests run correctly
 
 ### Optimized
 - `matchesKey()` now uses reference equality fast-path (`===`) before falling back to `JSON.stringify` comparison — significantly faster for string/number key segments

@@ -43,7 +43,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "prepublishOnly": "npm test && npm run package",
+    "prepublishOnly": "bun test && bun run package",
     "package": "svelte-package -i src",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
